@@ -1,0 +1,79 @@
+# ============================================================
+# Makefile برای پروژه سیستم مدیریت کتابخانه شخصی
+# پشتیبانی Cross-Platform (ویندوز و لینوکس)
+# ============================================================
+
+# تشخیص سیستم‌عامل
+ifeq ($(OS),Windows_NT)
+    # ویندوز
+    CXX = g++
+    TARGET = build/library_app.exe
+    OBJ_DIR = build
+    SRC_DIR = src
+    INC_DIR = include
+else
+    # لینوکس و مک
+    CXX = g++
+    TARGET = build/library_app
+    OBJ_DIR = build
+    SRC_DIR = src
+    INC_DIR = include
+endif
+
+# فلگ‌های کامپایل
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -O2
+INCLUDES = -Iinclude
+
+# پیدا کردن تمام فایل‌های .cpp
+SRCS = $(wildcard $(SRC_DIR)/*.cpp)
+OBJS = $(patsubst $(SRC_DIR)/%.cpp, $(OBJ_DIR)/%.o, $(SRCS))
+
+# ============================================================
+# قوانین ساخت (Build Rules)
+# ============================================================
+
+# هدف پیش‌فرض
+all: $(TARGET)
+
+# ساخت فایل نهایی
+$(TARGET): $(OBJS)
+	@echo "Linking..."
+	$(CXX) $(CXXFLAGS) $(OBJS) -o $(TARGET)
+	@echo "Build successful: $(TARGET)"
+
+# کامپایل هر فایل .cpp به .o
+# استفاده از mkdir -p که هم در sh و هم در bash کار می‌کند
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
+	@mkdir -p $(OBJ_DIR)
+	@echo "Compiling: $<"
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+# ============================================================
+# اهداف کمکی
+# ============================================================
+
+# اجرای برنامه
+run: $(TARGET)
+	./$(TARGET)
+
+# پاک کردن فایل‌های ساخته شده
+clean:
+	@echo "Cleaning build files..."
+	@rm -f $(OBJ_DIR)/*.o $(TARGET)
+	@echo "Clean complete."
+
+# ساخت مجدد کامل
+rebuild: clean all
+
+# نمایش کمک
+help:
+	@echo "Available targets:"
+	@echo "  make          - Build the project"
+	@echo "  make run      - Build and run the project"
+	@echo "  make clean    - Clean build files"
+	@echo "  make rebuild  - Clean and rebuild"
+
+# ============================================================
+# قوانین ویژه
+# ============================================================
+.PHONY: all clean run rebuild help
