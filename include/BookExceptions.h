@@ -3,7 +3,7 @@
 
 #include <stdexcept>
 #include <string>
-
+ 
 class BookException : public std::runtime_error {
 public:
     explicit BookException(const std::string& message)

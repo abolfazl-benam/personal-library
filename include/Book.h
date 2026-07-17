@@ -4,7 +4,7 @@
 #include <string>
 #include <iostream>
 #include "BookExceptions.h"
-
+ 
 class Book {
 private:
     std::string title;

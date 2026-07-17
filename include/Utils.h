@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
-
+ 
 #if defined(_WIN32) || defined(_WIN64)
     #include <io.h>
     #include <cstdio>

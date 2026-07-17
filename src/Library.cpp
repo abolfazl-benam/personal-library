@@ -8,7 +8,7 @@
 #include <iomanip>
 #include <filesystem>
 #include <iostream>
-
+ 
 std::vector<Book>::iterator Library::findByISBN(const std::string& isbn) {
     std::string normalized = Utils::normalizeISBN(isbn);
     return std::find_if(books.begin(), books.end(),

@@ -15,7 +15,7 @@ Book::Book(const std::string& title,
     setISBN(isbn);
     setPublicationYear(publicationYear);
 }
-
+ 
 std::string Book::getTitle() const { return title; }
 std::string Book::getAuthor() const { return author; }
 std::string Book::getISBN() const { return isbn; }
