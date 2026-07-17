@@ -1,19 +1,3 @@
-/**
- * @file main.cpp
- * @brief برنامه اصلی سیستم مدیریت کتابخانه شخصی
- *
- * این فایل شامل منوی کنسولی و تابع main است.
- * مسئولیت‌ها:
- * - نمایش منوی اصلی
- * - دریافت ورودی از کاربر
- * - فراخوانی متدهای مناسب روی شیء Library
- * - مدیریت استثناها و نمایش پیام‌های خطا
- *
- * نکته: تمام پیام‌های نمایش داده شده به کاربر به زبان انگلیسی هستند
- * تا در تمام کنسول‌ها (به خصوص CMD ویندوز) بدون مشکل encoding نمایش داده شوند.
- * کامنت‌ها و توضیحات کد به زبان فارسی هستند.
- */
-
 #include <iostream>
 #include <string>
 #include <memory>
@@ -23,19 +7,11 @@
 #include "Utils.h"
 #include "BookExceptions.h"
 
-// ============================================================
-// ثابت‌های برنامه
-// ============================================================
-
 constexpr const char* DATA_FILE = "data/library.dat";
-constexpr const char* CSV_FILE = "data/library.csv";
+constexpr const char* CSV_FILE  = "data/library.csv";
 constexpr const char* JSON_FILE = "data/library.json";
-constexpr const char* APP_NAME = "Personal Library Management System";
+constexpr const char* APP_NAME    = "Personal Library Management System";
 constexpr const char* APP_VERSION = "v2.0";
-
-// ============================================================
-// اعلان توابع منو
-// ============================================================
 
 void displayMainMenu();
 void handleAddBook(Library& library);
@@ -47,21 +23,14 @@ void handleSortBooks(Library& library);
 void handleSaveMenu(const Library& library);
 void handleLoadMenu(Library& library);
 
-// ============================================================
-// تابع اصلی
-// ============================================================
-
 int main() {
-    // نمایش مسیر فعلی اجرای برنامه برای دیباگ
     std::cout << "[i] Working directory: "
               << std::filesystem::current_path().string() << "\n";
     std::cout << "[i] Data file location: "
               << std::filesystem::absolute(DATA_FILE).string() << "\n\n";
 
-    // ایجاد شیء کتابخانه
     Library library;
 
-    // بارگذاری خودکار داده‌ها از فایل در شروع برنامه
     try {
         library.loadFromBinaryFile(DATA_FILE);
         if (!library.empty()) {
@@ -69,7 +38,6 @@ int main() {
                       << " book(s) from file.\n";
         }
     } catch (const FileOperationException& e) {
-        // اگر فایل وجود ندارد، پیام خطا نمایش نمی‌دهیم (طبیعی است)
         std::cout << "[i] No data file found. It will be created on first save.\n";
     } catch (const std::exception& e) {
         std::cerr << "[!] Error loading initial data: " << e.what() << "\n";
@@ -88,7 +56,6 @@ int main() {
 
         int choice;
         if (!(std::cin >> choice)) {
-            // اگر به EOF رسیدیم (مثلا ورودی از فایل تمام شده)
             if (std::cin.eof()) {
                 std::cout << "\n[BYE] Input ended. Goodbye!\n";
                 break;
@@ -102,32 +69,15 @@ int main() {
 
         try {
             switch (choice) {
-                case 1:
-                    handleAddBook(library);
-                    break;
-                case 2:
-                    handleRemoveBook(library);
-                    break;
-                case 3:
-                    handleEditBook(library);
-                    break;
-                case 4:
-                    handleSearchBooks(library);
-                    break;
-                case 5:
-                    handleDisplayAll(library);
-                    break;
-                case 6:
-                    handleSortBooks(library);
-                    break;
-                case 7:
-                    handleSaveMenu(library);
-                    break;
-                case 8:
-                    handleLoadMenu(library);
-                    break;
+                case 1: handleAddBook(library);     break;
+                case 2: handleRemoveBook(library);  break;
+                case 3: handleEditBook(library);    break;
+                case 4: handleSearchBooks(library); break;
+                case 5: handleDisplayAll(library);  break;
+                case 6: handleSortBooks(library);   break;
+                case 7: handleSaveMenu(library);    break;
+                case 8: handleLoadMenu(library);    break;
                 case 0:
-                    // قبل از خروج، از کاربر می‌پرسیم که آیا می‌خواهد ذخیره کند
                     if (!library.empty()) {
                         bool save = Utils::getYesNo(
                             "Do you want to save changes before exiting? (y/n): ");
@@ -157,7 +107,6 @@ int main() {
         }
 
         if (running) {
-            // اگر به EOF رسیدیم، pauseScreen نباید منتظر ورودی بماند
             if (!std::cin.eof()) {
                 Utils::pauseScreen();
             } else {
@@ -168,10 +117,6 @@ int main() {
 
     return 0;
 }
-
-// ============================================================
-// پیاده‌سازی توابع منو
-// ============================================================
 
 void displayMainMenu() {
     std::cout << "|                                                          |\n";
@@ -187,15 +132,12 @@ void displayMainMenu() {
     std::cout << "|                                                          |\n";
 }
 
-// ------------------------------------------------------------
-// ۱. افزودن کتاب
-// ------------------------------------------------------------
 void handleAddBook(Library& library) {
     std::cout << "\n=== [+] Add New Book ===\n";
 
-    std::string title = Utils::getNonEmptyString("Book title: ", "title");
+    std::string title  = Utils::getNonEmptyString("Book title: ", "title");
     std::string author = Utils::getNonEmptyString("Author name: ", "author");
-    std::string isbn = Utils::getValidISBN("ISBN (10 or 13 digits): ");
+    std::string isbn   = Utils::getValidISBN("ISBN (10 or 13 digits): ");
     int year = Utils::getValidYear();
 
     Book book(title, author, isbn, year);
@@ -205,9 +147,6 @@ void handleAddBook(Library& library) {
     book.display();
 }
 
-// ------------------------------------------------------------
-// ۲. حذف کتاب
-// ------------------------------------------------------------
 void handleRemoveBook(Library& library) {
     std::cout << "\n=== [-] Remove Book ===\n";
 
@@ -218,7 +157,6 @@ void handleRemoveBook(Library& library) {
 
     std::string isbn = Utils::getValidISBN("Enter ISBN of the book to remove: ");
 
-    // نمایش کتاب قبل از حذف برای تایید
     auto results = library.searchByISBN(isbn);
     if (results.empty()) {
         std::cout << "[X] No book found with this ISBN.\n";
@@ -237,9 +175,6 @@ void handleRemoveBook(Library& library) {
     }
 }
 
-// ------------------------------------------------------------
-// ۳. ویرایش کتاب
-// ------------------------------------------------------------
 void handleEditBook(Library& library) {
     std::cout << "\n=== [E] Edit Book ===\n";
 
@@ -250,7 +185,6 @@ void handleEditBook(Library& library) {
 
     std::string isbn = Utils::getValidISBN("Enter ISBN of the book to edit: ");
 
-    // نمایش کتاب فعلی
     auto results = library.searchByISBN(isbn);
     if (results.empty()) {
         std::cout << "[X] No book found with this ISBN.\n";
@@ -261,7 +195,6 @@ void handleEditBook(Library& library) {
     results[0].display();
     std::cout << "\nPress Enter to keep the current value.\n\n";
 
-    // دریافت مقادیر جدید (اختیاری)
     std::cout << "New title (Enter to keep): ";
     std::string newTitle;
     std::getline(std::cin, newTitle);
@@ -284,9 +217,6 @@ void handleEditBook(Library& library) {
     }
 }
 
-// ------------------------------------------------------------
-// ۴. جستجوی کتاب
-// ------------------------------------------------------------
 void handleSearchBooks(const Library& library) {
     std::cout << "\n=== [?] Search Books ===\n";
     std::cout << "1. Search by title\n";
@@ -328,17 +258,11 @@ void handleSearchBooks(const Library& library) {
     }
 }
 
-// ------------------------------------------------------------
-// ۵. نمایش تمام کتاب‌ها
-// ------------------------------------------------------------
 void handleDisplayAll(const Library& library) {
     std::cout << "\n";
     library.displayAll();
 }
 
-// ------------------------------------------------------------
-// ۶. مرتب‌سازی کتاب‌ها
-// ------------------------------------------------------------
 void handleSortBooks(Library& library) {
     std::cout << "\n=== [S] Sort Books ===\n";
     std::cout << "1. By title\n";
@@ -378,9 +302,6 @@ void handleSortBooks(Library& library) {
     library.displayAll();
 }
 
-// ------------------------------------------------------------
-// ۷. ذخیره در فایل (با انتخاب فرمت)
-// ------------------------------------------------------------
 void handleSaveMenu(const Library& library) {
     std::cout << "\n=== [W] Save Data ===\n";
 
@@ -426,9 +347,6 @@ void handleSaveMenu(const Library& library) {
     }
 }
 
-// ------------------------------------------------------------
-// ۸. بارگذاری از فایل (با انتخاب فرمت)
-// ------------------------------------------------------------
 void handleLoadMenu(Library& library) {
     std::cout << "\n=== [R] Load Data ===\n";
 
