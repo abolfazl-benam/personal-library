@@ -11,7 +11,7 @@ constexpr const char* DATA_FILE = "data/library.dat";
 constexpr const char* CSV_FILE  = "data/library.csv";
 constexpr const char* JSON_FILE = "data/library.json";
 constexpr const char* APP_NAME    = "Personal Library Management System";
-constexpr const char* APP_VERSION = "v2.0";
+constexpr const char* APP_VERSION = "v1.0";
 
 void displayMainMenu();
 void handleAddBook(Library& library);
