@@ -1,97 +1,126 @@
 #include "Book.h"
-#include "Utils.h"
-#include <iomanip>
+#include <iostream>
+#include <cstring>
+using namespace std;
 
-Book::Book()
-    : title(""), author(""), isbn(""), publicationYear(0) {}
-
-Book::Book(const std::string& title,
-           const std::string& author,
-           const std::string& isbn,
-           int publicationYear)
-    : publicationYear(0) {
-    setTitle(title);
-    setAuthor(author);
-    setISBN(isbn);
-    setPublicationYear(publicationYear);
-}
- 
-std::string Book::getTitle() const { return title; }
-std::string Book::getAuthor() const { return author; }
-std::string Book::getISBN() const { return isbn; }
-int Book::getPublicationYear() const { return publicationYear; }
-
-void Book::setTitle(const std::string& title) {
-    if (Utils::isEmptyOrWhitespace(title)) {
-        throw EmptyFieldException("title");
-    }
-    this->title = title;
+Book::Book() {
+    title[0] = '\0';
+    author[0] = '\0';
+    isbn[0] = '\0';
+    publicationYear = 0;
 }
 
-void Book::setAuthor(const std::string& author) {
-    if (Utils::isEmptyOrWhitespace(author)) {
-        throw EmptyFieldException("author");
-    }
-    this->author = author;
+Book::Book(const char* t, const char* a, const char* i, int year) {
+    setTitle(t);
+    setAuthor(a);
+    setISBN(i);
+    setPublicationYear(year);
 }
 
-void Book::setISBN(const std::string& isbn) {
-    std::string normalized = Utils::normalizeISBN(isbn);
-    if (!Utils::isValidISBN(normalized)) {
-        throw InvalidISBNException(isbn);
+const char* Book::getTitle() const {
+    return title;
+}
+
+const char* Book::getAuthor() const {
+    return author;
+}
+
+const char* Book::getISBN() const {
+    return isbn;
+}
+
+int Book::getPublicationYear() const {
+    return publicationYear;
+}
+
+void Book::setTitle(const char* t) {
+    if (t == NULL || strlen(t) == 0) {
+        throw "Title cannot be empty";
     }
-    this->isbn = normalized;
+    if (strlen(t) >= MAX_TITLE_LEN) {
+        throw "Title is too long";
+    }
+    strcpy(title, t);
+}
+
+void Book::setAuthor(const char* a) {
+    if (a == NULL || strlen(a) == 0) {
+        throw "Author cannot be empty";
+    }
+    if (strlen(a) >= MAX_AUTHOR_LEN) {
+        throw "Author name is too long";
+    }
+    strcpy(author, a);
+}
+
+void Book::setISBN(const char* i) {
+    if (i == NULL || strlen(i) == 0) {
+        throw "ISBN cannot be empty";
+    }
+
+    int digitCount = 0;
+    for (int k = 0; i[k] != '\0'; k++) {
+        if (i[k] >= '0' && i[k] <= '9') {
+            digitCount++;
+        } else if (i[k] != '-') {
+            throw "ISBN contains invalid characters";
+        }
+    }
+
+    if (digitCount != 10 && digitCount != 13) {
+        throw "ISBN must have 10 or 13 digits";
+    }
+
+    int j = 0;
+    for (int k = 0; i[k] != '\0'; k++) {
+        if (i[k] != '-') {
+            isbn[j] = i[k];
+            j++;
+        }
+    }
+    isbn[j] = '\0';
 }
 
 void Book::setPublicationYear(int year) {
-    if (!Utils::isValidYear(year)) {
-        throw InvalidYearException(year);
+    if (year < 1450 || year > 2026) {
+        throw "Year must be between 1450 and 2026";
     }
-    this->publicationYear = year;
+    publicationYear = year;
 }
 
-void Book::display() const {
-    std::cout << "+----------------------------------------------+\n";
-    std::cout << "|  Title:    " << title << "\n";
-    std::cout << "|  Author:   " << author << "\n";
-    std::cout << "|  ISBN:     " << isbn << "\n";
-    std::cout << "|  Year:     " << publicationYear << "\n";
-    std::cout << "+----------------------------------------------+\n";
+void Book::print() const {
+    cout << "+----------------------------------------------+" << endl;
+    cout << "|  Title:    " << title << endl;
+    cout << "|  Author:   " << author << endl;
+    cout << "|  ISBN:     " << isbn << endl;
+    cout << "|  Year:     " << publicationYear << endl;
+    cout << "+----------------------------------------------+" << endl;
 }
 
-std::string Book::toString() const {
-    return "Title: " + title +
-           " | Author: " + author +
-           " | ISBN: " + isbn +
-           " | Year: " + std::to_string(publicationYear);
+ostream& operator<<(ostream& out, const Book& book) {
+    out << "Title: " << book.title
+        << " | Author: " << book.author
+        << " | ISBN: " << book.isbn
+        << " | Year: " << book.publicationYear;
+    return out;
 }
 
-bool Book::operator==(const Book& other) const {
-    return isbn == other.isbn;
-}
-
-std::ostream& operator<<(std::ostream& os, const Book& book) {
-    os << "Title: " << book.title
-       << " | Author: " << book.author
-       << " | ISBN: " << book.isbn
-       << " | Year: " << book.publicationYear;
-    return os;
-}
-
-std::istream& operator>>(std::istream& is, Book& book) {
-    std::string title, author, isbn;
+istream& operator>>(istream& in, Book& book) {
+    char title[MAX_TITLE_LEN];
+    char author[MAX_AUTHOR_LEN];
+    char isbn[MAX_ISBN_LEN];
     int year;
 
-    std::cout << "Title: ";
-    std::getline(is, title);
-    std::cout << "Author: ";
-    std::getline(is, author);
-    std::cout << "ISBN: ";
-    std::getline(is, isbn);
-    std::cout << "Publication year: ";
-    is >> year;
-    is.ignore();
+    cout << "Title: ";
+    in.getline(title, MAX_TITLE_LEN);
+    cout << "Author: ";
+    in.getline(author, MAX_AUTHOR_LEN);
+    cout << "ISBN: ";
+    in.getline(isbn, MAX_ISBN_LEN);
+    cout << "Publication year: ";
+    in >> year;
+    in.ignore();
 
     book = Book(title, author, isbn, year);
-    return is;
+    return in;
 }

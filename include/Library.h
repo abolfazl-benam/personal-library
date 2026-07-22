@@ -1,58 +1,42 @@
 #ifndef LIBRARY_H
 #define LIBRARY_H
 
-#include <vector>
-#include <string>
 #include "Book.h"
+#include "Vector.h"
+using namespace std;
 
 class Library {
-public:
-    enum class SortField {
-        TITLE,
-        AUTHOR,
-        ISBN,
-        YEAR
-    };
-
-    enum class SortOrder {
-        ASCENDING,
-        DESCENDING
-    };
-
 private:
-    std::vector<Book> books;
+    Vector<Book> books;
 
-    std::vector<Book>::iterator findByISBN(const std::string& isbn);
-    std::vector<Book>::const_iterator findByISBN(const std::string& isbn) const;
+    int findByISBN(const char* isbn) const;
 
 public:
-    void addBook(const Book& book);
-    void editBook(const std::string& isbn,
-                  const std::string& newTitle = "",
-                  const std::string& newAuthor = "",
-                  int newYear = 0);
-    void removeBook(const std::string& isbn);
+    Library();
+    ~Library();
 
-    std::vector<Book> searchByTitle(const std::string& title) const;
-    std::vector<Book> searchByAuthor(const std::string& author) const;
-    std::vector<Book> searchByISBN(const std::string& isbn) const;
+    bool addBook(const Book& book);
+    bool editBook(const char* isbn, const char* newTitle, const char* newAuthor, int newYear);
+    bool removeBook(const char* isbn);
 
-    void sortBy(SortField field, SortOrder order = SortOrder::ASCENDING);
+    Vector<Book> searchByTitle(const char* title) const;
+    Vector<Book> searchByAuthor(const char* author) const;
+    Vector<Book> searchByISBN(const char* isbn) const;
 
+    void sortBy(int field, int order);
     void displayAll() const;
 
-    void saveToBinaryFile(const std::string& filename) const;
-    void loadFromBinaryFile(const std::string& filename);
+    bool saveToBinaryFile(const char* filename) const;
+    bool loadFromBinaryFile(const char* filename);
 
-    void saveToCSVFile(const std::string& filename) const;
-    void loadFromCSVFile(const std::string& filename);
+    bool saveToCSVFile(const char* filename) const;
+    bool loadFromCSVFile(const char* filename);
 
-    void saveToJSONFile(const std::string& filename) const;
-    void loadFromJSONFile(const std::string& filename);
+    bool saveToJSONFile(const char* filename) const;
+    bool loadFromJSONFile(const char* filename);
 
-    size_t size() const;
+    int size() const;
     bool empty() const;
-    const std::vector<Book>& getBooks() const;
 };
 
 #endif

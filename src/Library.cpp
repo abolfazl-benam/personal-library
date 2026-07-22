@@ -1,583 +1,686 @@
 #include "Library.h"
-#include "BookExceptions.h"
-#include "Utils.h"
-
-#include <algorithm>
-#include <fstream>
-#include <cstdint>
-#include <iomanip>
-#include <filesystem>
 #include <iostream>
- 
-std::vector<Book>::iterator Library::findByISBN(const std::string& isbn) {
-    std::string normalized = Utils::normalizeISBN(isbn);
-    return std::find_if(books.begin(), books.end(),
-                        [&normalized](const Book& b) {
-                            return b.getISBN() == normalized;
-                        });
+#include <fstream>
+#include <cstring>
+#include <cstdlib>
+#include <sys/stat.h>
+#if defined(_WIN32) || defined(_WIN64)
+    #include <direct.h>
+#endif
+using namespace std;
+
+const int FIELD_TITLE = 0;
+const int FIELD_AUTHOR = 1;
+const int FIELD_ISBN = 2;
+const int FIELD_YEAR = 3;
+
+const int ORDER_ASC = 0;
+const int ORDER_DESC = 1;
+
+// ساخت پوشه data/ در صورت عدم وجود
+void ensureDataDirExists(const char* filename) {
+    char dir[100];
+    int i = 0;
+    while (filename[i] != '\0' && filename[i] != '/' && i < 99) {
+        dir[i] = filename[i];
+        i++;
+    }
+    if (filename[i] == '/') {
+        dir[i] = '\0';
+#if defined(_WIN32) || defined(_WIN64)
+        _mkdir(dir);
+#else
+        mkdir(dir, 0755);
+#endif
+    }
 }
 
-std::vector<Book>::const_iterator Library::findByISBN(const std::string& isbn) const {
-    std::string normalized = Utils::normalizeISBN(isbn);
-    return std::find_if(books.begin(), books.end(),
-                        [&normalized](const Book& b) {
-                            return b.getISBN() == normalized;
-                        });
+Library::Library() {
 }
 
-void Library::addBook(const Book& book) {
-    if (findByISBN(book.getISBN()) != books.end()) {
-        throw DuplicateISBNException(book.getISBN());
-    }
-    books.push_back(book);
+Library::~Library() {
 }
 
-void Library::editBook(const std::string& isbn,
-                       const std::string& newTitle,
-                       const std::string& newAuthor,
-                       int newYear) {
-    auto it = findByISBN(isbn);
-    if (it == books.end()) {
-        throw BookNotFoundException(isbn);
+int Library::findByISBN(const char* isbn) const {
+    char normalized[MAX_ISBN_LEN];
+    int j = 0;
+    for (int k = 0; isbn[k] != '\0' && j < MAX_ISBN_LEN - 1; k++) {
+        if (isbn[k] != '-') {
+            normalized[j] = isbn[k];
+            j++;
+        }
+    }
+    normalized[j] = '\0';
+
+    for (int i = 0; i < books.len(); i++) {
+        if (strcmp(books.get(i).getISBN(), normalized) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool Library::addBook(const Book& book) {
+    if (findByISBN(book.getISBN()) != -1) {
+        cout << "Error: Book with this ISBN already exists." << endl;
+        return false;
+    }
+    books.add(book);
+    return true;
+}
+
+bool Library::editBook(const char* isbn, const char* newTitle, const char* newAuthor, int newYear) {
+    int index = findByISBN(isbn);
+    if (index == -1) {
+        cout << "Error: Book not found." << endl;
+        return false;
     }
 
-    if (!Utils::isEmptyOrWhitespace(newTitle)) {
-        it->setTitle(newTitle);
+    Book b = books.get(index);
+
+    if (newTitle != NULL && strlen(newTitle) > 0) {
+        b.setTitle(newTitle);
     }
-    if (!Utils::isEmptyOrWhitespace(newAuthor)) {
-        it->setAuthor(newAuthor);
+    if (newAuthor != NULL && strlen(newAuthor) > 0) {
+        b.setAuthor(newAuthor);
     }
     if (newYear != 0) {
-        it->setPublicationYear(newYear);
+        b.setPublicationYear(newYear);
     }
+
+    books.set(index, b);
+    return true;
 }
 
-void Library::removeBook(const std::string& isbn) {
-    auto it = findByISBN(isbn);
-    if (it == books.end()) {
-        throw BookNotFoundException(isbn);
+bool Library::removeBook(const char* isbn) {
+    int index = findByISBN(isbn);
+    if (index == -1) {
+        cout << "Error: Book not found." << endl;
+        return false;
     }
-    books.erase(it);
+    books.removeAt(index);
+    return true;
 }
 
-std::vector<Book> Library::searchByTitle(const std::string& title) const {
-    std::vector<Book> results;
-    std::string lowerTitle = Utils::toLower(title);
+Vector<Book> Library::searchByTitle(const char* title) const {
+    Vector<Book> results;
 
-    std::copy_if(books.begin(), books.end(), std::back_inserter(results),
-                 [&lowerTitle](const Book& b) {
-                     std::string bookTitle = Utils::toLower(b.getTitle());
-                     return bookTitle.find(lowerTitle) != std::string::npos;
-                 });
-    return results;
-}
-
-std::vector<Book> Library::searchByAuthor(const std::string& author) const {
-    std::vector<Book> results;
-    std::string lowerAuthor = Utils::toLower(author);
-
-    std::copy_if(books.begin(), books.end(), std::back_inserter(results),
-                 [&lowerAuthor](const Book& b) {
-                     std::string bookAuthor = Utils::toLower(b.getAuthor());
-                     return bookAuthor.find(lowerAuthor) != std::string::npos;
-                 });
-    return results;
-}
-
-std::vector<Book> Library::searchByISBN(const std::string& isbn) const {
-    std::vector<Book> results;
-    std::string normalized = Utils::normalizeISBN(isbn);
-
-    std::copy_if(books.begin(), books.end(), std::back_inserter(results),
-                 [&normalized](const Book& b) {
-                     return b.getISBN() == normalized;
-                 });
-    return results;
-}
-
-void Library::sortBy(SortField field, SortOrder order) {
-    auto comparator = [field, order](const Book& a, const Book& b) {
-        bool result = false;
-        switch (field) {
-            case SortField::TITLE:
-                result = a.getTitle() < b.getTitle();
-                break;
-            case SortField::AUTHOR:
-                result = a.getAuthor() < b.getAuthor();
-                break;
-            case SortField::ISBN:
-                result = a.getISBN() < b.getISBN();
-                break;
-            case SortField::YEAR:
-                result = a.getPublicationYear() < b.getPublicationYear();
-                break;
+    char lowerTitle[200];
+    int i = 0;
+    for (; title[i] != '\0' && i < 199; i++) {
+        char c = title[i];
+        if (c >= 'A' && c <= 'Z') {
+            c = c + ('a' - 'A');
         }
-        return (order == SortOrder::ASCENDING) ? result : !result;
-    };
+        lowerTitle[i] = c;
+    }
+    lowerTitle[i] = '\0';
 
-    std::sort(books.begin(), books.end(), comparator);
+    for (int k = 0; k < books.len(); k++) {
+        char bookTitle[200];
+        strcpy(bookTitle, books.get(k).getTitle());
+
+        for (int j = 0; bookTitle[j] != '\0'; j++) {
+            char c = bookTitle[j];
+            if (c >= 'A' && c <= 'Z') {
+                bookTitle[j] = c + ('a' - 'A');
+            }
+        }
+
+        if (strstr(bookTitle, lowerTitle) != NULL) {
+            results.add(books.get(k));
+        }
+    }
+    return results;
+}
+
+Vector<Book> Library::searchByAuthor(const char* author) const {
+    Vector<Book> results;
+
+    char lowerAuthor[200];
+    int i = 0;
+    for (; author[i] != '\0' && i < 199; i++) {
+        char c = author[i];
+        if (c >= 'A' && c <= 'Z') {
+            c = c + ('a' - 'A');
+        }
+        lowerAuthor[i] = c;
+    }
+    lowerAuthor[i] = '\0';
+
+    for (int k = 0; k < books.len(); k++) {
+        char bookAuthor[200];
+        strcpy(bookAuthor, books.get(k).getAuthor());
+
+        for (int j = 0; bookAuthor[j] != '\0'; j++) {
+            char c = bookAuthor[j];
+            if (c >= 'A' && c <= 'Z') {
+                bookAuthor[j] = c + ('a' - 'A');
+            }
+        }
+
+        if (strstr(bookAuthor, lowerAuthor) != NULL) {
+            results.add(books.get(k));
+        }
+    }
+    return results;
+}
+
+Vector<Book> Library::searchByISBN(const char* isbn) const {
+    Vector<Book> results;
+    int index = findByISBN(isbn);
+    if (index != -1) {
+        results.add(books.get(index));
+    }
+    return results;
+}
+
+void Library::sortBy(int field, int order) {
+    int n = books.len();
+
+    for (int i = 0; i < n - 1; i++) {
+        for (int j = 0; j < n - i - 1; j++) {
+            Book a = books.get(j);
+            Book b = books.get(j + 1);
+
+            bool shouldSwap = false;
+
+            if (field == FIELD_TITLE) {
+                int cmp = strcmp(a.getTitle(), b.getTitle());
+                if (order == ORDER_ASC) {
+                    shouldSwap = (cmp > 0);
+                } else {
+                    shouldSwap = (cmp < 0);
+                }
+            } else if (field == FIELD_AUTHOR) {
+                int cmp = strcmp(a.getAuthor(), b.getAuthor());
+                if (order == ORDER_ASC) {
+                    shouldSwap = (cmp > 0);
+                } else {
+                    shouldSwap = (cmp < 0);
+                }
+            } else if (field == FIELD_ISBN) {
+                int cmp = strcmp(a.getISBN(), b.getISBN());
+                if (order == ORDER_ASC) {
+                    shouldSwap = (cmp > 0);
+                } else {
+                    shouldSwap = (cmp < 0);
+                }
+            } else if (field == FIELD_YEAR) {
+                if (order == ORDER_ASC) {
+                    shouldSwap = (a.getPublicationYear() > b.getPublicationYear());
+                } else {
+                    shouldSwap = (a.getPublicationYear() < b.getPublicationYear());
+                }
+            }
+
+            if (shouldSwap) {
+                Book temp = books.get(j);
+                books.set(j, books.get(j + 1));
+                books.set(j + 1, temp);
+            }
+        }
+    }
 }
 
 void Library::displayAll() const {
-    if (books.empty()) {
-        std::cout << "Library is empty. No books to display.\n";
+    if (books.isEmpty()) {
+        cout << "Library is empty. No books to display." << endl;
         return;
     }
 
-    std::cout << "\n+--------------------------------------------------------------+\n";
-    std::cout << "|                      Library Book List                       |\n";
-    std::cout << "+--------------------------------------------------------------+\n";
-    std::cout << "| " << std::left << std::setw(4)  << "#"
-              << "| " << std::setw(25) << "Title"
-              << "| " << std::setw(20) << "Author"
-              << "| " << std::setw(15) << "ISBN"
-              << "| " << std::setw(6)  << "Year" << "|\n";
-    std::cout << "+--------------------------------------------------------------+\n";
+    cout << endl;
+    cout << "+--------------------------------------------------------------+" << endl;
+    cout << "|                      Library Book List                       |" << endl;
+    cout << "+--------------------------------------------------------------+" << endl;
+    cout << "| #  | Title                    | Author              | ISBN            | Year  |" << endl;
+    cout << "+--------------------------------------------------------------+" << endl;
 
-    int index = 1;
-    for (const auto& book : books) {
-        std::string title = book.getTitle();
-        std::string author = book.getAuthor();
-        std::string isbn = book.getISBN();
+    for (int i = 0; i < books.len(); i++) {
+        Book b = books.get(i);
 
-        if (title.length() > 24) title = title.substr(0, 23) + ".";
-        if (author.length() > 19) author = author.substr(0, 18) + ".";
-        if (isbn.length() > 14) isbn = isbn.substr(0, 13) + ".";
+        char title[30];
+        char author[25];
+        char isbn[20];
 
-        std::cout << "| " << std::left << std::setw(4)  << index++
-                  << "| " << std::setw(25) << title
-                  << "| " << std::setw(20) << author
-                  << "| " << std::setw(15) << isbn
-                  << "| " << std::setw(6)  << book.getPublicationYear() << "|\n";
-    }
-    std::cout << "+--------------------------------------------------------------+\n";
-    std::cout << " Total: " << books.size() << " book(s)\n";
-}
-
-void Library::saveToBinaryFile(const std::string& filename) const {
-    std::cout << "[i] Saving to: " << std::filesystem::absolute(filename).string() << "\n";
-
-    auto parentPath = std::filesystem::path(filename).parent_path();
-    if (!parentPath.empty() && !std::filesystem::exists(parentPath)) {
-        std::cout << "[i] Creating directory: "
-                  << std::filesystem::absolute(parentPath).string() << "\n";
-        if (!std::filesystem::create_directories(parentPath)) {
-            throw FileOperationException("create directory for",
-                std::filesystem::absolute(parentPath).string());
+        strncpy(title, b.getTitle(), 28);
+        title[28] = '\0';
+        if (strlen(b.getTitle()) > 28) {
+            title[27] = '.';
+            title[28] = '\0';
         }
+
+        strncpy(author, b.getAuthor(), 22);
+        author[22] = '\0';
+        if (strlen(b.getAuthor()) > 22) {
+            author[21] = '.';
+            author[22] = '\0';
+        }
+
+        strncpy(isbn, b.getISBN(), 17);
+        isbn[17] = '\0';
+
+        cout << "| " << (i + 1) << "  | " << title << " | " << author << " | " << isbn << " | " << b.getPublicationYear() << " |" << endl;
     }
-
-    std::ofstream outFile(filename, std::ios::binary | std::ios::trunc);
-    if (!outFile.is_open()) {
-        throw FileOperationException("write", filename);
-    }
-
-    uint32_t count = static_cast<uint32_t>(books.size());
-    outFile.write(reinterpret_cast<const char*>(&count), sizeof(count));
-
-    for (const auto& book : books) {
-        auto writeString = [&outFile](const std::string& str) {
-            uint32_t len = static_cast<uint32_t>(str.size());
-            outFile.write(reinterpret_cast<const char*>(&len), sizeof(len));
-            outFile.write(str.data(), len);
-        };
-
-        writeString(book.getTitle());
-        writeString(book.getAuthor());
-        writeString(book.getISBN());
-
-        int year = book.getPublicationYear();
-        outFile.write(reinterpret_cast<const char*>(&year), sizeof(year));
-    }
-
-    outFile.close();
-
-    if (!outFile) {
-        throw FileOperationException("write", filename);
-    }
-
-    if (std::filesystem::exists(filename)) {
-        auto fileSize = std::filesystem::file_size(filename);
-        std::cout << "[OK] File created. Size: " << fileSize << " bytes.\n";
-    }
+    cout << "+--------------------------------------------------------------+" << endl;
+    cout << " Total: " << books.len() << " book(s)" << endl;
 }
 
-void Library::loadFromBinaryFile(const std::string& filename) {
-    std::ifstream inFile(filename, std::ios::binary);
-    if (!inFile.is_open()) {
-        throw FileOperationException("read", filename);
+bool Library::saveToBinaryFile(const char* filename) const {
+    ensureDataDirExists(filename);
+
+    ofstream out(filename, ios::binary);
+    if (!out.is_open()) {
+        cout << "Error: Cannot open file for writing: " << filename << endl;
+        return false;
+    }
+
+    int count = books.len();
+    out.write((char*)&count, sizeof(int));
+
+    for (int i = 0; i < count; i++) {
+        Book b = books.get(i);
+        out.write((char*)&b, sizeof(Book));
+    }
+
+    out.close();
+    return true;
+}
+
+bool Library::loadFromBinaryFile(const char* filename) {
+    ifstream in(filename, ios::binary);
+    if (!in.is_open()) {
+        return false;
     }
 
     books.clear();
 
-    uint32_t count = 0;
-    inFile.read(reinterpret_cast<char*>(&count), sizeof(count));
+    int count = 0;
+    in.read((char*)&count, sizeof(int));
 
-    if (inFile.eof()) {
-        inFile.close();
-        return;
+    for (int i = 0; i < count; i++) {
+        Book b;
+        in.read((char*)&b, sizeof(Book));
+        books.add(b);
     }
 
-    for (uint32_t i = 0; i < count; ++i) {
-        auto readString = [&inFile]() -> std::string {
-            uint32_t len = 0;
-            inFile.read(reinterpret_cast<char*>(&len), sizeof(len));
-            if (inFile.eof() || len > 10000) {
-                return "";
-            }
-            std::string str(len, '\0');
-            inFile.read(&str[0], len);
-            return str;
-        };
-
-        std::string title = readString();
-        std::string author = readString();
-        std::string isbn = readString();
-
-        int year = 0;
-        inFile.read(reinterpret_cast<char*>(&year), sizeof(year));
-
-        if (inFile) {
-            try {
-                Book book(title, author, isbn, year);
-                books.push_back(book);
-            } catch (const BookException& e) {
-                std::cerr << "[!] Warning: Invalid book in file (row " << i + 1
-                          << ") skipped: " << e.what() << "\n";
-            }
-        }
-    }
-
-    inFile.close();
+    in.close();
+    return true;
 }
 
-namespace {
-    std::string escapeCSV(const std::string& str) {
-        bool needsQuoting = false;
-        for (char c : str) {
-            if (c == ',' || c == '"' || c == '\n' || c == '\r') {
-                needsQuoting = true;
-                break;
-            }
-        }
-        if (!needsQuoting) {
-            return str;
-        }
-        std::string result = "\"";
-        for (char c : str) {
-            if (c == '"') {
-                result += "\"\"";
-            } else {
-                result += c;
-            }
-        }
-        result += "\"";
-        return result;
+bool Library::saveToCSVFile(const char* filename) const {
+    ensureDataDirExists(filename);
+
+    ofstream out(filename);
+    if (!out.is_open()) {
+        cout << "Error: Cannot open file for writing: " << filename << endl;
+        return false;
     }
 
-    std::string unescapeCSV(const std::string& str) {
-        if (str.size() < 2 || str.front() != '"' || str.back() != '"') {
-            return str;
-        }
-        std::string inner = str.substr(1, str.size() - 2);
-        std::string result;
-        result.reserve(inner.size());
-        for (size_t i = 0; i < inner.size(); ++i) {
-            if (inner[i] == '"' && i + 1 < inner.size() && inner[i + 1] == '"') {
-                result += '"';
-                ++i;
-            } else {
-                result += inner[i];
-            }
-        }
-        return result;
+    out << "Title,Author,ISBN,Year" << endl;
+
+    for (int i = 0; i < books.len(); i++) {
+        Book b = books.get(i);
+
+        out << "\"" << b.getTitle() << "\",";
+        out << "\"" << b.getAuthor() << "\",";
+        out << "\"" << b.getISBN() << "\",";
+        out << b.getPublicationYear() << endl;
     }
 
-    std::vector<std::string> parseCSVLine(const std::string& line) {
-        std::vector<std::string> fields;
-        std::string current;
-        bool inQuotes = false;
-
-        for (size_t i = 0; i < line.size(); ++i) {
-            char c = line[i];
-            if (inQuotes) {
-                if (c == '"') {
-                    if (i + 1 < line.size() && line[i + 1] == '"') {
-                        current += '"';
-                        ++i;
-                    } else {
-                        inQuotes = false;
-                    }
-                } else {
-                    current += c;
-                }
-            } else {
-                if (c == '"') {
-                    inQuotes = true;
-                } else if (c == ',') {
-                    fields.push_back(current);
-                    current.clear();
-                } else {
-                    current += c;
-                }
-            }
-        }
-        fields.push_back(current);
-        return fields;
-    }
-
-    std::string escapeJSON(const std::string& str) {
-        std::string result;
-        result.reserve(str.size() + 10);
-        for (char c : str) {
-            switch (c) {
-                case '"':  result += "\\\""; break;
-                case '\\': result += "\\\\"; break;
-                case '\n': result += "\\n";  break;
-                case '\r': result += "\\r";  break;
-                case '\t': result += "\\t";  break;
-                default:
-                    if (static_cast<unsigned char>(c) < 0x20) {
-                        char buf[8];
-                        snprintf(buf, sizeof(buf), "\\u%04x",
-                                 static_cast<unsigned char>(c));
-                        result += buf;
-                    } else {
-                        result += c;
-                    }
-            }
-        }
-        return result;
-    }
+    out.close();
+    return true;
 }
 
-void Library::saveToCSVFile(const std::string& filename) const {
-    auto parentPath = std::filesystem::path(filename).parent_path();
-    if (!parentPath.empty() && !std::filesystem::exists(parentPath)) {
-        std::filesystem::create_directories(parentPath);
-    }
-
-    std::ofstream outFile(filename);
-    if (!outFile.is_open()) {
-        throw FileOperationException("write", filename);
-    }
-
-    outFile << "Title,Author,ISBN,Year\n";
-
-    for (const auto& book : books) {
-        outFile << escapeCSV(book.getTitle()) << ","
-                << escapeCSV(book.getAuthor()) << ","
-                << escapeCSV(book.getISBN()) << ","
-                << book.getPublicationYear() << "\n";
-    }
-
-    outFile.close();
-    if (!outFile) {
-        throw FileOperationException("write", filename);
-    }
-}
-
-void Library::loadFromCSVFile(const std::string& filename) {
-    std::ifstream inFile(filename);
-    if (!inFile.is_open()) {
-        throw FileOperationException("read", filename);
+bool Library::loadFromCSVFile(const char* filename) {
+    ifstream in(filename);
+    if (!in.is_open()) {
+        return false;
     }
 
     books.clear();
 
-    std::string line;
+    char line[1000];
     bool firstLine = true;
 
-    while (std::getline(inFile, line)) {
-        if (line.empty() || line == "\r") {
+    while (in.getline(line, 1000)) {
+        if (strlen(line) == 0) {
             continue;
-        }
-
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
         }
 
         if (firstLine) {
             firstLine = false;
-            std::string lowerLine = Utils::toLower(line);
-            if (lowerLine.find("title") != std::string::npos) {
+            char lowerLine[100];
+            for (int i = 0; line[i] != '\0' && i < 99; i++) {
+                char c = line[i];
+                if (c >= 'A' && c <= 'Z') {
+                    c = c + ('a' - 'A');
+                }
+                lowerLine[i] = c;
+            }
+            lowerLine[strlen(line) < 99 ? strlen(line) : 99] = '\0';
+
+            if (strstr(lowerLine, "title") != NULL) {
                 continue;
             }
         }
 
-        std::vector<std::string> fields = parseCSVLine(line);
-        if (fields.size() < 4) {
-            std::cerr << "[!] Warning: Invalid CSV row skipped: " << line << "\n";
-            continue;
+        char title[200] = "";
+        char author[200] = "";
+        char isbn[50] = "";
+        char yearStr[20] = "";
+
+        int fieldIndex = 0;
+        int pos = 0;
+
+        while (line[pos] != '\0' && fieldIndex < 4) {
+            char field[200] = "";
+            int fpos = 0;
+
+            if (line[pos] == '"') {
+                pos++;
+                while (line[pos] != '\0' && line[pos] != '"') {
+                    if (line[pos] == '"' && line[pos + 1] == '"') {
+                        field[fpos] = '"';
+                        fpos++;
+                        pos += 2;
+                    } else {
+                        field[fpos] = line[pos];
+                        fpos++;
+                        pos++;
+                    }
+                }
+                if (line[pos] == '"') {
+                    pos++;
+                }
+                if (line[pos] == ',') {
+                    pos++;
+                }
+            } else {
+                while (line[pos] != '\0' && line[pos] != ',') {
+                    field[fpos] = line[pos];
+                    fpos++;
+                    pos++;
+                }
+                if (line[pos] == ',') {
+                    pos++;
+                }
+            }
+            field[fpos] = '\0';
+
+            if (fieldIndex == 0) strcpy(title, field);
+            else if (fieldIndex == 1) strcpy(author, field);
+            else if (fieldIndex == 2) strcpy(isbn, field);
+            else if (fieldIndex == 3) strcpy(yearStr, field);
+
+            fieldIndex++;
         }
 
-        std::string title   = unescapeCSV(fields[0]);
-        std::string author  = unescapeCSV(fields[1]);
-        std::string isbn    = unescapeCSV(fields[2]);
-        std::string yearStr = unescapeCSV(fields[3]);
-
-        try {
-            int year = std::stoi(yearStr);
-            Book book(title, author, isbn, year);
-            books.push_back(book);
-        } catch (const std::exception& e) {
-            std::cerr << "[!] Warning: Invalid book in CSV row skipped: "
-                      << line << " (" << e.what() << ")\n";
+        if (fieldIndex == 4) {
+            try {
+                int year = atoi(yearStr);
+                Book b(title, author, isbn, year);
+                books.add(b);
+            } catch (const char* msg) {
+                cout << "Warning: Invalid book skipped: " << msg << endl;
+            }
         }
     }
 
-    inFile.close();
+    in.close();
+    return true;
 }
 
-void Library::saveToJSONFile(const std::string& filename) const {
-    auto parentPath = std::filesystem::path(filename).parent_path();
-    if (!parentPath.empty() && !std::filesystem::exists(parentPath)) {
-        std::filesystem::create_directories(parentPath);
+bool Library::saveToJSONFile(const char* filename) const {
+    ensureDataDirExists(filename);
+
+    ofstream out(filename);
+    if (!out.is_open()) {
+        cout << "Error: Cannot open file for writing: " << filename << endl;
+        return false;
     }
 
-    std::ofstream outFile(filename);
-    if (!outFile.is_open()) {
-        throw FileOperationException("write", filename);
-    }
+    out << "{" << endl;
+    out << "  \"books\": [" << endl;
 
-    outFile << "{\n";
-    outFile << "  \"books\": [\n";
+    for (int i = 0; i < books.len(); i++) {
+        Book b = books.get(i);
 
-    for (size_t i = 0; i < books.size(); ++i) {
-        const auto& book = books[i];
-        outFile << "    {\n";
-        outFile << "      \"title\": \"" << escapeJSON(book.getTitle()) << "\",\n";
-        outFile << "      \"author\": \"" << escapeJSON(book.getAuthor()) << "\",\n";
-        outFile << "      \"isbn\": \"" << escapeJSON(book.getISBN()) << "\",\n";
-        outFile << "      \"year\": " << book.getPublicationYear() << "\n";
-        outFile << "    }";
-        if (i + 1 < books.size()) {
-            outFile << ",";
+        out << "    {" << endl;
+
+        out << "      \"title\": \"";
+        for (int k = 0; b.getTitle()[k] != '\0'; k++) {
+            char c = b.getTitle()[k];
+            if (c == '"') out << "\\\"";
+            else if (c == '\\') out << "\\\\";
+            else if (c == '\n') out << "\\n";
+            else if (c == '\r') out << "\\r";
+            else if (c == '\t') out << "\\t";
+            else out << c;
         }
-        outFile << "\n";
+        out << "\"," << endl;
+
+        out << "      \"author\": \"";
+        for (int k = 0; b.getAuthor()[k] != '\0'; k++) {
+            char c = b.getAuthor()[k];
+            if (c == '"') out << "\\\"";
+            else if (c == '\\') out << "\\\\";
+            else if (c == '\n') out << "\\n";
+            else if (c == '\r') out << "\\r";
+            else if (c == '\t') out << "\\t";
+            else out << c;
+        }
+        out << "\"," << endl;
+
+        out << "      \"isbn\": \"";
+        for (int k = 0; b.getISBN()[k] != '\0'; k++) {
+            char c = b.getISBN()[k];
+            if (c == '"') out << "\\\"";
+            else if (c == '\\') out << "\\\\";
+            else out << c;
+        }
+        out << "\"," << endl;
+
+        out << "      \"year\": " << b.getPublicationYear() << endl;
+
+        out << "    }";
+        if (i < books.len() - 1) {
+            out << ",";
+        }
+        out << endl;
     }
 
-    outFile << "  ]\n";
-    outFile << "}\n";
+    out << "  ]" << endl;
+    out << "}" << endl;
 
-    outFile.close();
-    if (!outFile) {
-        throw FileOperationException("write", filename);
-    }
+    out.close();
+    return true;
 }
 
-void Library::loadFromJSONFile(const std::string& filename) {
-    std::ifstream inFile(filename);
-    if (!inFile.is_open()) {
-        throw FileOperationException("read", filename);
+bool Library::loadFromJSONFile(const char* filename) {
+    ifstream in(filename);
+    if (!in.is_open()) {
+        return false;
     }
-
-    std::string content((std::istreambuf_iterator<char>(inFile)),
-                         std::istreambuf_iterator<char>());
-    inFile.close();
 
     books.clear();
 
-    size_t booksPos = content.find("\"books\"");
-    if (booksPos == std::string::npos) {
-        return;
+    char content[50000];
+    content[0] = '\0';
+    char line[1000];
+
+    while (in.getline(line, 1000)) {
+        strcat(content, line);
+        strcat(content, "\n");
+    }
+    in.close();
+
+    char* booksPos = strstr(content, "\"books\"");
+    if (booksPos == NULL) {
+        return true;
     }
 
-    size_t arrayStart = content.find('[', booksPos);
-    if (arrayStart == std::string::npos) {
-        return;
+    char* arrayStart = strchr(booksPos, '[');
+    if (arrayStart == NULL) {
+        return true;
     }
 
-    size_t arrayEnd = content.find(']', arrayStart);
-    if (arrayEnd == std::string::npos) {
-        return;
+    char* arrayEnd = strchr(arrayStart, ']');
+    if (arrayEnd == NULL) {
+        return true;
     }
 
-    size_t pos = arrayStart + 1;
+    char* pos = arrayStart + 1;
+
     while (pos < arrayEnd) {
-        size_t objStart = content.find('{', pos);
-        if (objStart == std::string::npos || objStart >= arrayEnd) {
+        char* objStart = strchr(pos, '{');
+        if (objStart == NULL || objStart >= arrayEnd) {
             break;
         }
 
-        size_t objEnd = objStart + 1;
         int braceCount = 1;
+        char* objEnd = objStart + 1;
         while (objEnd < arrayEnd && braceCount > 0) {
-            if (content[objEnd] == '{') braceCount++;
-            else if (content[objEnd] == '}') braceCount--;
+            if (*objEnd == '{') braceCount++;
+            else if (*objEnd == '}') braceCount--;
             objEnd++;
         }
 
-        std::string objStr = content.substr(objStart, objEnd - objStart);
+        char objStr[2000];
+        int objLen = objEnd - objStart;
+        if (objLen >= 2000) objLen = 1999;
+        strncpy(objStr, objStart, objLen);
+        objStr[objLen] = '\0';
 
-        auto extractField = [&objStr](const std::string& key) -> std::string {
-            std::string pattern = "\"" + key + "\"";
-            size_t keyPos = objStr.find(pattern);
-            if (keyPos == std::string::npos) return "";
+        char title[200] = "";
+        char author[200] = "";
+        char isbn[50] = "";
+        char yearStr[20] = "";
 
-            size_t colonPos = objStr.find(':', keyPos + pattern.size());
-            if (colonPos == std::string::npos) return "";
-
-            size_t valueStart = colonPos + 1;
-            while (valueStart < objStr.size() &&
-                   (objStr[valueStart] == ' ' || objStr[valueStart] == '\t')) {
-                valueStart++;
-            }
-
-            if (valueStart >= objStr.size()) return "";
-
-            if (objStr[valueStart] == '"') {
-                size_t valueEnd = valueStart + 1;
-                std::string result;
-                while (valueEnd < objStr.size() && objStr[valueEnd] != '"') {
-                    if (objStr[valueEnd] == '\\' && valueEnd + 1 < objStr.size()) {
-                        char next = objStr[valueEnd + 1];
-                        switch (next) {
-                            case '"':  result += '"';  break;
-                            case '\\': result += '\\'; break;
-                            case 'n':  result += '\n'; break;
-                            case 'r':  result += '\r'; break;
-                            case 't':  result += '\t'; break;
-                            default:   result += next; break;
+        char* keyPos = strstr(objStr, "\"title\"");
+        if (keyPos != NULL) {
+            char* colonPos = strchr(keyPos, ':');
+            if (colonPos != NULL) {
+                char* valueStart = colonPos + 1;
+                while (*valueStart == ' ' || *valueStart == '\t') valueStart++;
+                if (*valueStart == '"') {
+                    valueStart++;
+                    int j = 0;
+                    while (*valueStart != '\0' && *valueStart != '"' && j < 199) {
+                        if (*valueStart == '\\' && *(valueStart + 1) != '\0') {
+                            char next = *(valueStart + 1);
+                            if (next == '"') title[j] = '"';
+                            else if (next == '\\') title[j] = '\\';
+                            else if (next == 'n') title[j] = '\n';
+                            else if (next == 't') title[j] = '\t';
+                            else title[j] = next;
+                            j++;
+                            valueStart += 2;
+                        } else {
+                            title[j] = *valueStart;
+                            j++;
+                            valueStart++;
                         }
-                        valueEnd += 2;
-                    } else {
-                        result += objStr[valueEnd];
-                        valueEnd++;
                     }
+                    title[j] = '\0';
                 }
-                return result;
-            } else {
-                size_t valueEnd = valueStart;
-                while (valueEnd < objStr.size() &&
-                       (std::isdigit(static_cast<unsigned char>(objStr[valueEnd])) ||
-                        objStr[valueEnd] == '-')) {
-                    valueEnd++;
-                }
-                return objStr.substr(valueStart, valueEnd - valueStart);
             }
-        };
+        }
 
-        std::string title  = extractField("title");
-        std::string author = extractField("author");
-        std::string isbn   = extractField("isbn");
-        std::string yearStr = extractField("year");
+        keyPos = strstr(objStr, "\"author\"");
+        if (keyPos != NULL) {
+            char* colonPos = strchr(keyPos, ':');
+            if (colonPos != NULL) {
+                char* valueStart = colonPos + 1;
+                while (*valueStart == ' ' || *valueStart == '\t') valueStart++;
+                if (*valueStart == '"') {
+                    valueStart++;
+                    int j = 0;
+                    while (*valueStart != '\0' && *valueStart != '"' && j < 199) {
+                        if (*valueStart == '\\' && *(valueStart + 1) != '\0') {
+                            char next = *(valueStart + 1);
+                            if (next == '"') author[j] = '"';
+                            else if (next == '\\') author[j] = '\\';
+                            else if (next == 'n') author[j] = '\n';
+                            else if (next == 't') author[j] = '\t';
+                            else author[j] = next;
+                            j++;
+                            valueStart += 2;
+                        } else {
+                            author[j] = *valueStart;
+                            j++;
+                            valueStart++;
+                        }
+                    }
+                    author[j] = '\0';
+                }
+            }
+        }
 
-        try {
-            int year = yearStr.empty() ? 0 : std::stoi(yearStr);
-            Book book(title, author, isbn, year);
-            books.push_back(book);
-        } catch (const std::exception& e) {
-            std::cerr << "[!] Warning: Invalid book in JSON skipped: "
-                      << e.what() << "\n";
+        keyPos = strstr(objStr, "\"isbn\"");
+        if (keyPos != NULL) {
+            char* colonPos = strchr(keyPos, ':');
+            if (colonPos != NULL) {
+                char* valueStart = colonPos + 1;
+                while (*valueStart == ' ' || *valueStart == '\t') valueStart++;
+                if (*valueStart == '"') {
+                    valueStart++;
+                    int j = 0;
+                    while (*valueStart != '\0' && *valueStart != '"' && j < 49) {
+                        if (*valueStart == '\\' && *(valueStart + 1) != '\0') {
+                            char next = *(valueStart + 1);
+                            if (next == '"') isbn[j] = '"';
+                            else if (next == '\\') isbn[j] = '\\';
+                            else isbn[j] = next;
+                            j++;
+                            valueStart += 2;
+                        } else {
+                            isbn[j] = *valueStart;
+                            j++;
+                            valueStart++;
+                        }
+                    }
+                    isbn[j] = '\0';
+                }
+            }
+        }
+
+        keyPos = strstr(objStr, "\"year\"");
+        if (keyPos != NULL) {
+            char* colonPos = strchr(keyPos, ':');
+            if (colonPos != NULL) {
+                char* valueStart = colonPos + 1;
+                while (*valueStart == ' ' || *valueStart == '\t') valueStart++;
+                int j = 0;
+                while ((*valueStart >= '0' && *valueStart <= '9') || *valueStart == '-') {
+                    yearStr[j] = *valueStart;
+                    j++;
+                    valueStart++;
+                }
+                yearStr[j] = '\0';
+            }
+        }
+
+        if (strlen(title) > 0 && strlen(author) > 0 && strlen(isbn) > 0) {
+            try {
+                int year = atoi(yearStr);
+                Book b(title, author, isbn, year);
+                books.add(b);
+            } catch (const char* msg) {
+                cout << "Warning: Invalid book in JSON skipped: " << msg << endl;
+            }
         }
 
         pos = objEnd;
     }
+
+    return true;
 }
 
-size_t Library::size() const { return books.size(); }
+int Library::size() const {
+    return books.len();
+}
 
-bool Library::empty() const { return books.empty(); }
-
-const std::vector<Book>& Library::getBooks() const { return books; }
+bool Library::empty() const {
+    return books.isEmpty();
+}

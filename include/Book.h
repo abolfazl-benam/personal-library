@@ -1,40 +1,39 @@
 #ifndef BOOK_H
 #define BOOK_H
 
-#include <string>
 #include <iostream>
-#include "BookExceptions.h"
- 
+#include <cstring>
+using namespace std;
+
+const int MAX_TITLE_LEN = 200;
+const int MAX_AUTHOR_LEN = 100;
+const int MAX_ISBN_LEN = 20;
+
 class Book {
 private:
-    std::string title;
-    std::string author;
-    std::string isbn;
+    char title[MAX_TITLE_LEN];
+    char author[MAX_AUTHOR_LEN];
+    char isbn[MAX_ISBN_LEN];
     int publicationYear;
 
 public:
     Book();
-    Book(const std::string& title,
-         const std::string& author,
-         const std::string& isbn,
-         int publicationYear);
+    Book(const char* title, const char* author, const char* isbn, int year);
 
-    std::string getTitle() const;
-    std::string getAuthor() const;
-    std::string getISBN() const;
+    const char* getTitle() const;
+    const char* getAuthor() const;
+    const char* getISBN() const;
     int getPublicationYear() const;
 
-    void setTitle(const std::string& title);
-    void setAuthor(const std::string& author);
-    void setISBN(const std::string& isbn);
+    void setTitle(const char* title);
+    void setAuthor(const char* author);
+    void setISBN(const char* isbn);
     void setPublicationYear(int year);
 
-    void display() const;
-    std::string toString() const;
+    void print() const;
 
-    bool operator==(const Book& other) const;
-    friend std::ostream& operator<<(std::ostream& os, const Book& book);
-    friend std::istream& operator>>(std::istream& is, Book& book);
+    friend ostream& operator<<(ostream& out, const Book& book);
+    friend istream& operator>>(istream& in, Book& book);
 };
 
 #endif

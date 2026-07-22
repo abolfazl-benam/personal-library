@@ -1,25 +1,17 @@
-
+CXX = g++
+CXXFLAGS = -std=c++11 -Wall -Wextra -g -O2
+INCLUDES = -Iinclude
+SRC_DIR = src
+OBJ_DIR = build
+INC_DIR = include
 ifeq ($(OS),Windows_NT)
-
-    CXX = g++
     TARGET = build/library_app.exe
-    OBJ_DIR = build
-    SRC_DIR = src
-    INC_DIR = include
 else
-
-    CXX = g++
     TARGET = build/library_app
-    OBJ_DIR = build
-    SRC_DIR = src
-    INC_DIR = include
 endif
 
-
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -O2
-INCLUDES = -Iinclude
-
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)
+
 OBJS = $(patsubst $(SRC_DIR)/%.cpp, $(OBJ_DIR)/%.o, $(SRCS))
 
 all: $(TARGET)
